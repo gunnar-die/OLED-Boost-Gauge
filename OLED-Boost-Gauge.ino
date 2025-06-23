@@ -44,7 +44,7 @@ const float ADC_MAX_READING = 1023.0; // Maximum raw value from analogRead()
 void setup() {
   // Initialize serial communication for debugging. Open Serial Monitor at 9600 baud.
   Serial.begin(9600);
-  Serial.println(F("--- Boost Gauge Initializing ---"));
+  Serial.println(F("--- Boost Gauge v1.0 Initializing ---")); // Added v1.0
   Serial.println(F("Attempting OLED display initialization..."));
 
   // Initialize OLED display. SSD1306_SWITCHCAPVCC generates display voltage internally.
@@ -61,7 +61,7 @@ void setup() {
   display.setTextSize(1);       // Normal 1:1 pixel scale
   display.setTextColor(SSD1306_WHITE); // Draw white text
   display.setCursor(0, 0);      // Start at the top-left corner
-  display.println(F("Boost Gauge"));
+  display.println(F("Boost Gauge v1.0")); // Added v1.0
   display.println(F("Ready..."));
   display.display(); // Push startup message to display
   delay(1500);       // Pause for 1.5 seconds
