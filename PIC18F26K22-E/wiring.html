@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PIC18F26K22-E Boost Gauge Wiring</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8;
+            color: #334155;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 1.5rem;
+            background-color: #ffffff;
+            border-radius: 1.5rem;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+        }
+        .component-box {
+            background-color: #e2e8f0;
+            border: 2px solid #64748b;
+            border-radius: 0.75rem;
+            padding: 1rem;
+            text-align: center;
+            position: relative;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+        }
+        .pin {
+            background-color: #3b82f6;
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            margin: 0.25rem;
+            display: inline-block;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .connection-line {
+            position: absolute;
+            height: 2px;
+            background-color: #0d9488; /* Teal */
+            z-index: 10;
+        }
+        .connection-label {
+            background-color: #0d9488;
+            color: white;
+            padding: 0.2rem 0.4rem;
+            border-radius: 0.25rem;
+            font-size: 0.7rem;
+            position: absolute;
+            z-index: 20;
+            white-space: nowrap;
+        }
+        .connection-arrow {
+            width: 0;
+            height: 0;
+            border-top: 5px solid transparent;
+            border-bottom: 5px solid transparent;
+            border-left: 8px solid #0d9488;
+            position: absolute;
+            z-index: 15;
+        }
+        .resistor-line {
+            display: inline-block;
+            width: 30px;
+            height: 10px;
+            border: 2px solid #ef4444; /* Red */
+            border-radius: 2px;
+            margin: 0 5px;
+            vertical-align: middle;
+            position: relative;
+        }
+        .resistor-line::before, .resistor-line::after {
+            content: '';
+            position: absolute;
+            width: 10px;
+            height: 2px;
+            background-color: #ef4444;
+            top: 4px;
+        }
+        .resistor-line::before { left: -10px; }
+        .resistor-line::after { right: -10px; }
+    </style>
+</head>
+<body class="p-4">
+    <div class="container">
+        <h1 class="text-3xl font-bold text-center mb-6 text-gray-800">PIC18F26K22-E Boost Gauge Wiring Diagram</h1>
+        <p class="text-center text-gray-600 mb-8">
+            This diagram illustrates the connections for your boost gauge project using the PIC18F26K22-E, SSD1306 OLED, and an analog pressure sensor.
+            Ensure your baud rate and I2C address in the code match your physical setup.
+        </p>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-8 items-start relative pb-20">
+
+            <!-- PIC18F26K22-E Microcontroller -->
+            <div id="pic-mcu" class="component-box md:col-span-1 p-6 flex flex-col items-center">
+                <h2 class="text-xl font-semibold mb-4 text-gray-700">PIC18F26K22-E</h2>
+                <div class="flex flex-wrap justify-center gap-2">
+                    <span class="pin bg-green-600">VDD (5V)</span>
+                    <span class="pin bg-green-600">VSS (GND)</span>
+                    <span class="pin" data-pin="RA0">RA0 (AN0)</span>
+                    <span class="pin" data-pin="RB0">RB0 (LATB0)</span>
+                    <span class="pin" data-pin="RC4">RC4 (SDA)</span>
+                    <span class="pin" data-pin="RC3">RC3 (SCL)</span>
+                    <span class="pin" data-pin="RC6">RC6 (TX)</span>
+                    <span class="pin" data-pin="RC7">RC7 (RX)</span>
+                    <span class="pin bg-red-600">MCLR (VPP)</span>
+                </div>
+                <p class="text-sm text-gray-500 mt-4">
+                    Main Microcontroller. Connect MCLR to 5V via a 10kΩ resistor.
+                </p>
+            </div>
+
+            <!-- SSD1306 OLED Display -->
+            <div id="oled-display" class="component-box md:col-span-1 p-6 flex flex-col items-center">
+                <h2 class="text-xl font-semibold mb-4 text-gray-700">SSD1306 OLED Display (I2C)</h2>
+                <div class="flex flex-wrap justify-center gap-2">
+                    <span class="pin bg-green-600">VCC (5V)</span>
+                    <span class="pin bg-green-600">GND</span>
+                    <span class="pin" data-pin="SDA">SDA</span>
+                    <span class="pin" data-pin="SCL">SCL</span>
+                    <span class="pin" data-pin="RST">RST</span>
+                </div>
+                <p class="text-sm text-gray-500 mt-4">
+                    128x64 Pixel I2C OLED Display.
+                </p>
+            </div>
+
+            <!-- Analog Pressure Sensor -->
+            <div id="pressure-sensor" class="component-box md:col-span-1 p-6 flex flex-col items-center">
+                <h2 class="text-xl font-semibold mb-4 text-gray-700">Analog Pressure Sensor</h2>
+                <div class="flex flex-wrap justify-center gap-2">
+                    <span class="pin bg-green-600">VCC (5V)</span>
+                    <span class="pin bg-green-600">GND</span>
+                    <span class="pin" data-pin="Signal_Out">Signal Out</span>
+                </div>
+                <p class="text-sm text-gray-500 mt-4">
+                    0-4.5V output analog sensor.
+                </p>
+            </div>
+
+            <!-- I2C Pull-up Resistors -->
+            <div id="i2c-resistors" class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-yellow-100 border-2 border-yellow-500 rounded-lg p-3 text-center shadow-md z-30">
+                <h3 class="font-bold text-yellow-800 text-sm mb-2">I2C Pull-up Resistors</h3>
+                <p class="text-xs text-yellow-700">
+                    Connect two 4.7kΩ - 10kΩ resistors:
+                </p>
+                <ul class="text-xs text-yellow-700 list-disc list-inside mt-1">
+                    <li>One from SDA to 5V</li>
+                    <li>One from SCL to 5V</li>
+                </ul>
+            </div>
+
+            <!-- USB-to-Serial Converter -->
+            <div id="usb-serial" class="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-blue-100 border-2 border-blue-500 rounded-lg p-3 text-center shadow-md z-30">
+                <h3 class="font-bold text-blue-800 text-sm mb-2">USB-to-Serial Converter (for Debugging/Programming)</h3>
+                <div class="flex justify-center gap-2">
+                    <span class="pin bg-blue-600" data-pin="USB_TX">TX (to PIC RX)</span>
+                    <span class="pin bg-blue-600" data-pin="USB_RX">RX (to PIC TX)</span>
+                    <span class="pin bg-green-600">GND</span>
+                </div>
+            </div>
+
+        </div>
+
+        <h2 class="text-2xl font-bold text-center mt-12 mb-4 text-gray-800">Connections Overview</h2>
+        <div class="space-y-4 text-gray-700">
+            <div class="bg-gray-50 p-4 rounded-lg shadow-sm">
+                <p><strong class="text-teal-700">Power:</strong> Connect all VCC pins (PIC, OLED, Sensor) to your 5V power supply. Connect all GND pins (PIC, OLED, Sensor, USB-to-Serial) to your power supply's GND.</p>
+                <p><strong class="text-red-700">MCLR:</strong> Connect PIC's MCLR pin to 5V through a 10kΩ pull-up resistor. This is essential for proper operation and programming.</p>
+            </div>
+            <div class="bg-gray-50 p-4 rounded-lg shadow-sm">
+                <p><strong class="text-teal-700">Pressure Sensor:</strong> Connect Sensor's Signal Out pin to PIC's RA0 (AN0).</p>
+            </div>
+            <div class="bg-gray-50 p-4 rounded-lg shadow-sm">
+                <p><strong class="text-teal-700">OLED Display (I2C):</strong></p>
+                <ul class="list-disc list-inside ml-4">
+                    <li>OLED SDA to PIC RC4.</li>
+                    <li>OLED SCL to PIC RC3.</li>
+                    <li>OLED RST to PIC RB0.</li>
+                    <li><strong class="text-yellow-700">I2C Pull-ups:</strong> Connect a 4.7kΩ - 10kΩ resistor from OLED SDA to 5V. Connect another 4.7kΩ - 10kΩ resistor from OLED SCL to 5V. These are critical for stable I2C communication.</li>
+                </ul>
+            </div>
+            <div class="bg-gray-50 p-4 rounded-lg shadow-sm">
+                <p><strong class="text-teal-700">UART (Serial Debugging - Optional):</strong></p>
+                <ul class="list-disc list-inside ml-4">
+                    <li>PIC RC6 (TX) to USB-to-Serial Converter's RX.</li>
+                    <li>PIC RC7 (RX) to USB-to-Serial Converter's TX.</li>
+                    <li>Ensure common GND between PIC and USB-to-Serial converter.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
