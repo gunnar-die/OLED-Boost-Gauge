@@ -17,13 +17,13 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 const int SENSOR_PIN = A0; // Analog input pin for your pressure sensor
 
 // --- Calibration Constants for Pressure Formulas ---
-// Formulas are calibrated to specific points from the sensor datasheet:
-// PSI: (1.0V, 0.0PSI) and (4.5V, 45.0PSI)
-// inHg: (0.1V, -30.0inHg) and (1.0V, 0.0inHg)
+// Formulas are recalibrated based on user's new readings (0.5psi resolution gauge):
+// PSI: (1.036V, 0.0PSI) and (4.0V, 46.0PSI)
+// inHg: (0.1V, -30.0inHg) and (1.0V, 0.0inHg) (retained from previous precise calibration)
 
 // PSI = (PSI_SLOPE * Signal V) + PSI_INTERCEPT
-const float PSI_SLOPE = 12.8571;
-const float PSI_INTERCEPT = -12.8571;
+const float PSI_SLOPE = 15.5128;   // (46.0 - 0.0) / (4.0 - 1.036)
+const float PSI_INTERCEPT = -16.0692; // 0.0 - (15.5128 * 1.036)
 
 // inHg = (INHG_SLOPE * Signal V) + INHG_INTERCEPT
 const float INHG_SLOPE = 33.3333;
@@ -44,7 +44,7 @@ const float ADC_MAX_READING = 1023.0; // Maximum raw value from analogRead()
 void setup() {
   // Initialize serial communication for debugging. Open Serial Monitor at 9600 baud.
   Serial.begin(9600);
-  Serial.println(F("--- Boost Gauge v1.0 Initializing ---")); // Added v1.0
+  Serial.println(F("--- Boost Gauge Initializing v1.0 ---"));
   Serial.println(F("Attempting OLED display initialization..."));
 
   // Initialize OLED display. SSD1306_SWITCHCAPVCC generates display voltage internally.
@@ -61,7 +61,7 @@ void setup() {
   display.setTextSize(1);       // Normal 1:1 pixel scale
   display.setTextColor(SSD1306_WHITE); // Draw white text
   display.setCursor(0, 0);      // Start at the top-left corner
-  display.println(F("Boost Gauge v1.0")); // Added v1.0
+  display.println(F("Boost Gauge v1.0"));
   display.println(F("Ready..."));
   display.display(); // Push startup message to display
   delay(1500);       // Pause for 1.5 seconds
