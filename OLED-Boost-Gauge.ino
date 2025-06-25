@@ -14,25 +14,30 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 // --- Sensor Settings ---
 const int SENSOR_PIN = A0; // Analog input pin for your pressure sensor
 
-// --- Calibration Constants for Pressure Formulas ---
+// --- Calibration Constants for Pressure Formulas (Derived from Manufacturer's Chart) ---
 // PSI = (PSI_SLOPE * Signal V) + PSI_INTERCEPT
-const float PSI_SLOPE = 15.5128;
-const float PSI_INTERCEPT = -16.0692;
+// Recalibrated based on chart points: (1.0V, 0.0PSI) and (3.33V, 30.0PSI)
+const float PSI_SLOPE = 12.875536;   // (30.0 - 0.0) / (3.33 - 1.0)
+const float PSI_INTERCEPT = -12.875536; // 0.0 - (12.875536 * 1.0)
 
-// Linear correction constants for PSI display output (Actual_PSI = M * OLED_PSI_Reading + B)
-const float PSI_CORRECTION_M = 0.86478;
-const float PSI_CORRECTION_B = -2.76730;
+// New linear correction constants for PSI display output (Actual_PSI = M * OLED_PSI_Reading + B)
+// Recalculated to anchor 0 PSI correctly and pull 41 PSI up to 43 PSI.
+// New anchor points derived from previous correction: (OLED Pre-Corr: ~4.01, Actual: 0) and (OLED Pre-Corr: ~51.425, Actual: 43)
+const float PSI_CORRECTION_M = 0.90697; // Slope: (43 - 0) / (51.425 - 4.01)
+const float PSI_CORRECTION_B = -3.6370; // Intercept: 0 - (0.90697 * 4.01)
+
 
 // inHg = (INHG_SLOPE * Signal V) + INHG_INTERCEPT
-const float INHG_SLOPE = 33.3333;
-const float INHG_INTERCEPT = -33.3333;
+// Based on chart points: (0.1V, -30.0inHg) and (1.0V, 0.0inHg)
+const float INHG_SLOPE = 33.3333; // (0.0 - (-30.0)) / (1.0 - 0.1)
+const float INHG_INTERCEPT = -33.3333; // 0.0 - (33.3333 * 1.0)
 
 // --- Display Limits ---
 const float MAX_BOOST_PSI = 45.0;
 const float MIN_VACUUM_INHG = -30.0;
 
 // --- Bar Graph Display Range ---
-const float BAR_GRAPH_MAX_PSI = 30.0;
+const float BAR_GRAPH_MAX_PSI = 36.0;
 const float BAR_GRAPH_MAX_INHG = 30.0;
 
 // --- ADC (Analog-to-Digital Converter) Reference Settings ---
@@ -89,11 +94,13 @@ void loop() {
   }
 
   display.clearDisplay();
-  display.setTextSize(3);
+  display.setTextSize(3); // Set main text size for numerical reading
   display.setTextColor(SSD1306_WHITE);
 
-  if (calculatedPSI >= 0.0) { // Positive pressure (boost)
-    calculatedPSI = (PSI_CORRECTION_M * calculatedPSI) + PSI_CORRECTION_B;
+  // Apply linear correction based on user's new calibration data
+  calculatedPSI = (PSI_CORRECTION_M * calculatedPSI) + PSI_CORRECTION_B;
+
+  if (calculatedPSI > 1.0) { // Positive pressure (boost)
     if (calculatedPSI > MAX_BOOST_PSI) {
       calculatedPSI = MAX_BOOST_PSI;
     }
@@ -104,7 +111,7 @@ void loop() {
     char psiUnitStr[] = " PSI";
     int16_t x1, y1;
     uint16_t w, h;
-    display.setTextSize(2);
+    display.setTextSize(2); // Set text size for the unit label specifically
     display.getTextBounds(psiUnitStr, 0, 0, &x1, &y1, &w, &h);
     int psiUnitX = SCREEN_WIDTH - w;
     display.setCursor(psiUnitX, 0);
@@ -112,27 +119,47 @@ void loop() {
 
     int barWidth = map(calculatedPSI * 100, 0 * 100, BAR_GRAPH_MAX_PSI * 100, 0, SCREEN_WIDTH);
     barWidth = constrain(barWidth, 0, SCREEN_WIDTH);
+    // Draw the solid background of the bar first (white)
     display.fillRect(0, 28, barWidth, 30, SSD1306_WHITE);
 
+    // Now, draw the '>' symbols on top of the white bar in black
     int barBaseY_psi = 28;
     int barHeight_psi = 30;
     int y_center_psi = barBaseY_psi + barHeight_psi / 2;
     int y_top_psi = barBaseY_psi;
     int y_bottom_psi = barBaseY_psi + barHeight_psi;
-    int arm_length = 10;
+    int arm_length = 10; // The horizontal span of each arm of the '>'
 
-    for (int x_draw = 0; x_draw < barWidth; x_draw += 10) {
-        for (int i = 0; i < 4; i++) {
-            display.drawLine(x_draw + i, y_top_psi,
-                             x_draw + arm_length + i, y_center_psi,
+    for (int x_draw = 0; x_draw < barWidth; x_draw += 10) { // Iterate with 10px spacing
+        for (int i = 0; i < 3; i++) { // For 3px thickness
+            // Draw top leg of '>'
+            display.drawLine(x_draw + i, y_top_psi, // Start X (left side of arm, shifted for thickness)
+                             x_draw + arm_length + i, y_center_psi, // End X (point, shifted for thickness)
                              SSD1306_BLACK);
-            display.drawLine(x_draw + i, y_bottom_psi,
-                             x_draw + arm_length + i, y_center_psi,
+            // Draw bottom leg of '>'
+            display.drawLine(x_draw + i, y_bottom_psi, // Start X (left side of arm, shifted for thickness)
+                             x_draw + arm_length + i, y_center_psi, // End X (point, shifted for thickness)
                              SSD1306_BLACK);
         }
     }
 
-  } else { // Negative pressure (vacuum)
+  } else if (calculatedPSI >= -1.0 && calculatedPSI <= 1.0) { // Display "0.0 PSI" for values between -1 and 1 PSI
+    display.setCursor(0, 0);
+    display.print(F("0.0"));
+
+    char psiUnitStr[] = " PSI";
+    int16_t x1, y1;
+    uint16_t w, h;
+    display.setTextSize(2); // Set text size for the unit label specifically
+    display.getTextBounds(psiUnitStr, 0, 0, &x1, &y1, &w, &h);
+    int psiUnitX = SCREEN_WIDTH - w;
+    display.setCursor(psiUnitX, 0);
+    display.print(F(" PSI"));
+
+    // Draw an empty bar for 0 PSI
+    display.fillRect(0, 28, 0, 30, SSD1306_WHITE); // Bar width 0
+  }
+  else { // Negative pressure (vacuum), calculatedPSI < -1.0
     if (calculatedInHg < MIN_VACUUM_INHG) {
       calculatedInHg = MIN_VACUUM_INHG;
     }
@@ -155,6 +182,7 @@ void loop() {
     int barBaseY_inHg = 40;
     int barHeight_inHg = 10;
 
+    // Draw the solid background of the bar first (white)
     display.fillRect(SCREEN_WIDTH - barWidth, barBaseY_inHg, barWidth, barHeight_inHg, SSD1306_WHITE);
 
     for (int x_slash_start = SCREEN_WIDTH - barWidth; x_slash_start < SCREEN_WIDTH; x_slash_start += 5) {
