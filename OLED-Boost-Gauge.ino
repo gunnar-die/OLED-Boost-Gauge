@@ -2,6 +2,9 @@
 #include <Adafruit_GFX.h>  // Core graphics library
 #include <Adafruit_SSD1306.h> // Library for SSD1306 OLED displays
 
+// --- Version Information ---
+const float VERSION_NUMBER = 1.1; // Current software version, easy to find
+
 // --- OLED Display Settings ---
 #define SCREEN_WIDTH 128 // OLED display width in pixels
 #define SCREEN_HEIGHT 64 // OLED display height in pixels
@@ -36,9 +39,24 @@ const float INHG_INTERCEPT = -33.3333; // 0.0 - (33.3333 * 1.0)
 const float MAX_BOOST_PSI = 45.0;
 const float MIN_VACUUM_INHG = -30.0;
 
-// --- Bar Graph Display Range ---
-const float BAR_GRAPH_MAX_PSI = 36.0;
+// --- Bar Graph Display Range (Dynamic via button) ---
+// Define possible BAR_GRAPH_MAX_PSI values
+const float PSI_RESOLUTIONS[] = {15.0, 22.0, 30.0, 40.0};
+const int NUM_PSI_RESOLUTIONS = sizeof(PSI_RESOLUTIONS) / sizeof(PSI_RESOLUTIONS[0]);
+int currentResolutionIndex = 2; // Default to 30.0 PSI (index 2 in the array)
+float BAR_GRAPH_MAX_PSI = PSI_RESOLUTIONS[currentResolutionIndex]; // Initialize with default
+
 const float BAR_GRAPH_MAX_INHG = 30.0;
+
+// --- Button Settings ---
+const int BUTTON_PIN = 2; // Digital pin for the button (e.g., D2)
+unsigned long lastButtonPressTime = 0;
+const long debounceDelay = 50; // Debounce time in milliseconds
+bool buttonPressedFlag = false;
+
+// --- Resolution Display Timer ---
+unsigned long resolutionDisplayStartTime = 0;
+const long resolutionDisplayDuration = 3000; // 3 seconds
 
 // --- ADC (Analog-to-Digital Converter) Reference Settings ---
 const float ADC_REF_VOLTAGE = 5.0;
@@ -49,9 +67,12 @@ unsigned long lastSerialPrintTime = 0;
 const long serialPrintInterval = 1500; // Print to serial every 1.5 seconds
 
 void setup() {
-  Serial.begin(9600);
-  Serial.println(F("--- Boost Gauge Initializing v1.0 ---"));
+  Serial.print(F("--- Boost Gauge Initializing v"));
+  Serial.print(VERSION_NUMBER, 1); // Print version with 1 decimal place
+  Serial.println(F(" ---"));
   Serial.println(F("Attempting OLED display initialization..."));
+
+  pinMode(BUTTON_PIN, INPUT_PULLUP); // Set button pin as input with internal pull-up
 
   if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
     Serial.println(F("ERROR: SSD1306 allocation failed. Check wiring, address (0x3C or 0x3D?), and reset pin."));
@@ -65,19 +86,71 @@ void setup() {
   display.setTextSize(1);
   display.setTextColor(SSD1306_WHITE);
   display.setCursor(0, 0);
-  display.println(F("Boost Gauge v1.0"));
+  display.print(F("Boost Gauge v")); // Print "Boost Gauge v"
+  display.print(VERSION_NUMBER, 1); // Print version with 1 decimal place
+  display.println(F("")); // Newline for the next text
   display.println(F("Ready..."));
   display.display();
   delay(1500);
 }
 
 void loop() {
+  unsigned long currentMillis = millis();
+
+  // --- Button Handling ---
+  int buttonState = digitalRead(BUTTON_PIN);
+  if (buttonState == LOW && !buttonPressedFlag && (currentMillis - lastButtonPressTime > debounceDelay)) {
+    // Button pressed (LOW because of INPUT_PULLUP)
+    lastButtonPressTime = currentMillis;
+    buttonPressedFlag = true;
+
+    // Cycle to the next resolution
+    currentResolutionIndex = (currentResolutionIndex + 1) % NUM_PSI_RESOLUTIONS;
+    BAR_GRAPH_MAX_PSI = PSI_RESOLUTIONS[currentResolutionIndex];
+    
+    // Activate resolution display mode
+    resolutionDisplayStartTime = currentMillis;
+
+    Serial.print(F("Button Pressed! New Resolution: ")); // Serial output for button press
+    Serial.println(BAR_GRAPH_MAX_PSI, 0);
+  } else if (buttonState == HIGH) {
+    buttonPressedFlag = false; // Reset flag when button is released
+  }
+
+  // --- Resolution Display Mode ---
+  if (currentMillis - resolutionDisplayStartTime < resolutionDisplayDuration) {
+    display.clearDisplay();
+    display.setTextColor(SSD1306_WHITE); // Ensure text color is white
+
+    // Display "RESOLUTION" on the top half
+    display.setTextSize(2); // Max size that fits 10 chars horizontally (120 pixels)
+    int16_t x1, y1;
+    uint16_t w, h;
+    display.getTextBounds("RESOLUTION", 0, 0, &x1, &y1, &w, &h);
+    display.setCursor((SCREEN_WIDTH - w) / 2, (SCREEN_HEIGHT / 2 - h) / 2); // Center horizontally, center vertically in top half
+    display.print(F("RESOLUTION"));
+
+    // Display "x PSI" on the bottom half
+    char psiValueBuffer[10]; // Buffer for "XX PSI\0"
+    sprintf(psiValueBuffer, "%d PSI", (int)BAR_GRAPH_MAX_PSI);
+    
+    display.setTextSize(3); // Max size for "XX PSI" (fits approx 108 pixels)
+    display.getTextBounds(psiValueBuffer, 0, 0, &x1, &y1, &w, &h);
+    display.setCursor((SCREEN_WIDTH - w) / 2, SCREEN_HEIGHT / 2 + (SCREEN_HEIGHT / 2 - h) / 2); // Center horizontally, center vertically in bottom half
+    display.print(psiValueBuffer);
+    
+    display.display();
+    delay(50); // Small delay for display update
+    return; // Skip the rest of the loop for this duration
+  }
+
+  // --- Normal Operation (if not in resolution display mode) ---
   int sensorRawValue = analogRead(SENSOR_PIN);
   float signalVoltage = sensorRawValue * (ADC_REF_VOLTAGE / ADC_MAX_READING);
   float calculatedPSI = (PSI_SLOPE * signalVoltage) + PSI_INTERCEPT;
   float calculatedInHg = (INHG_SLOPE * signalVoltage) + INHG_INTERCEPT;
 
-  unsigned long currentMillis = millis();
+  // --- Serial Monitor Output (non-blocking) ---
   if (currentMillis - lastSerialPrintTime >= serialPrintInterval) {
     lastSerialPrintTime = currentMillis;
 
@@ -87,10 +160,12 @@ void loop() {
     Serial.print(F("Voltage: "));
     Serial.println(signalVoltage, 3);
     
-    Serial.print(F("Calculated PSI: "));
+    Serial.print(F("Calculated PSI (pre-corr): "));
     Serial.print(calculatedPSI, 2);
     Serial.print(F(", inHg: "));
     Serial.println(calculatedInHg, 2);
+    Serial.print(F("Current BAR_GRAPH_MAX_PSI: "));
+    Serial.println(BAR_GRAPH_MAX_PSI, 0);
   }
 
   display.clearDisplay();
