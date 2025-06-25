@@ -73,3 +73,9 @@ The main logic resides within the `loop()` function, which continuously reads th
       * Draws a dynamic bar graph with unique patterns for PSI (`>`) and inHg (`\`).
       * Updates the physical OLED display.
       * `delay(50)` ensures a consistent 50ms display refresh rate.
+
+## PIC18F26K22-E Version
+
+An alternative implementation of this boost gauge project is also available using the **Microchip PIC18F26K22-E microcontroller**. This version provides similar functionality but leverages the PIC architecture and its native peripherals.
+
+**Please Note:** The PIC18F26K22-E version is currently **under development** and is provided as a **code skeleton**. It is not yet fully functional or independently runnable without further implementation and debugging of the underlying PIC peripherals (ADC, I2C, UART, and display drawing routines). 
