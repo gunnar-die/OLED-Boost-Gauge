@@ -5,10 +5,8 @@
 // --- OLED Display Settings ---
 #define SCREEN_WIDTH 128 // OLED display width in pixels
 #define SCREEN_HEIGHT 64 // OLED display height in pixels
-
-// Declaration for an SSD1306 display connected to I2C (SDA, SCL pins typically A4 and A5 on Nano)
 #define OLED_RESET 4 // Reset pin # (can be any digital pin, or -1 if sharing Arduino reset pin)
-#define SCREEN_ADDRESS 0x3C ///< Common I2C address for 128x64 SSD1306 OLEDs (0x3D is also common, check your module)
+#define SCREEN_ADDRESS 0x3C ///< Common I2C address for 128x64 SSD1306 OLEDs
 
 // Create the display object
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
@@ -17,136 +15,158 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 const int SENSOR_PIN = A0; // Analog input pin for your pressure sensor
 
 // --- Calibration Constants for Pressure Formulas ---
-// Formulas are recalibrated based on user's new readings (0.5psi resolution gauge):
-// PSI: (1.036V, 0.0PSI) and (4.0V, 46.0PSI)
-// inHg: (0.1V, -30.0inHg) and (1.0V, 0.0inHg) (retained from previous precise calibration)
-
 // PSI = (PSI_SLOPE * Signal V) + PSI_INTERCEPT
-const float PSI_SLOPE = 15.5128;   // (46.0 - 0.0) / (4.0 - 1.036)
-const float PSI_INTERCEPT = -16.0692; // 0.0 - (15.5128 * 1.036)
+const float PSI_SLOPE = 15.5128;
+const float PSI_INTERCEPT = -16.0692;
+
+// Linear correction constants for PSI display output (Actual_PSI = M * OLED_PSI_Reading + B)
+const float PSI_CORRECTION_M = 0.86478;
+const float PSI_CORRECTION_B = -2.76730;
 
 // inHg = (INHG_SLOPE * Signal V) + INHG_INTERCEPT
 const float INHG_SLOPE = 33.3333;
 const float INHG_INTERCEPT = -33.3333;
 
 // --- Display Limits ---
-const float MAX_BOOST_PSI = 45.0;    // Maximum boost pressure to display in PSI (overall sensor range)
-const float MIN_VACUUM_INHG = -30.0; // Minimum vacuum pressure to display in inHg (this value is negative)
+const float MAX_BOOST_PSI = 45.0;
+const float MIN_VACUUM_INHG = -30.0;
 
 // --- Bar Graph Display Range ---
-const float BAR_GRAPH_MAX_PSI = 30.0; // Max PSI for bar graph full scale (0 to SCREEN_WIDTH)
+const float BAR_GRAPH_MAX_PSI = 30.0;
+const float BAR_GRAPH_MAX_INHG = 30.0;
 
 // --- ADC (Analog-to-Digital Converter) Reference Settings ---
-// Standard Arduino ADC uses a 5V reference voltage and has 10-bit resolution (0-1023)
-const float ADC_REF_VOLTAGE = 5.0;   // Reference voltage of the Arduino's ADC (usually 5V for Nano)
-const float ADC_MAX_READING = 1023.0; // Maximum raw value from analogRead()
+const float ADC_REF_VOLTAGE = 5.0;
+const float ADC_MAX_READING = 1023.0;
+
+// --- Timing variables for non-blocking Serial output ---
+unsigned long lastSerialPrintTime = 0;
+const long serialPrintInterval = 1500; // Print to serial every 1.5 seconds
 
 void setup() {
-  // Initialize serial communication for debugging. Open Serial Monitor at 9600 baud.
   Serial.begin(9600);
   Serial.println(F("--- Boost Gauge Initializing v1.0 ---"));
   Serial.println(F("Attempting OLED display initialization..."));
 
-  // Initialize OLED display. SSD1306_SWITCHCAPVCC generates display voltage internally.
   if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
     Serial.println(F("ERROR: SSD1306 allocation failed. Check wiring, address (0x3C or 0x3D?), and reset pin."));
     for (;;); // Halt if display initialization fails
   }
   Serial.println(F("OLED display initialized successfully."));
 
-  // Clear display buffer and show a brief startup message
-  delay(2000); // Allow time for display to power up
+  delay(2000);
   display.clearDisplay();
 
-  display.setTextSize(1);       // Normal 1:1 pixel scale
-  display.setTextColor(SSD1306_WHITE); // Draw white text
-  display.setCursor(0, 0);      // Start at the top-left corner
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0, 0);
   display.println(F("Boost Gauge v1.0"));
   display.println(F("Ready..."));
-  display.display(); // Push startup message to display
-  delay(1500);       // Pause for 1.5 seconds
+  display.display();
+  delay(1500);
 }
 
 void loop() {
-  // Read raw analog sensor value (0 to 1023)
   int sensorRawValue = analogRead(SENSOR_PIN);
-  Serial.print(F("Raw: "));
-  Serial.println(sensorRawValue);
-  delay(500); // Delay for Serial output
-
-  // Convert raw sensor value to actual voltage (Signal V)
   float signalVoltage = sensorRawValue * (ADC_REF_VOLTAGE / ADC_MAX_READING);
-  Serial.print(F("Voltage: "));
-  Serial.println(signalVoltage, 3);
-  delay(500); // Delay for Serial output
-
-  // Calculate PSI and inHg using derived linear formulas
   float calculatedPSI = (PSI_SLOPE * signalVoltage) + PSI_INTERCEPT;
   float calculatedInHg = (INHG_SLOPE * signalVoltage) + INHG_INTERCEPT;
-  Serial.print(F("Calculated PSI: "));
-  Serial.print(calculatedPSI, 2);
-  Serial.print(F(", inHg: "));
-  Serial.println(calculatedInHg, 2);
-  delay(500); // Delay for Serial output
 
-  // Clear the display buffer for the new reading
+  unsigned long currentMillis = millis();
+  if (currentMillis - lastSerialPrintTime >= serialPrintInterval) {
+    lastSerialPrintTime = currentMillis;
+
+    Serial.print(F("Raw: "));
+    Serial.println(sensorRawValue);
+    
+    Serial.print(F("Voltage: "));
+    Serial.println(signalVoltage, 3);
+    
+    Serial.print(F("Calculated PSI: "));
+    Serial.print(calculatedPSI, 2);
+    Serial.print(F(", inHg: "));
+    Serial.println(calculatedInHg, 2);
+  }
+
   display.clearDisplay();
-
-  // Set text properties for the main pressure reading
-  display.setTextSize(3); // Increased text size for main numerical reading
+  display.setTextSize(3);
   display.setTextColor(SSD1306_WHITE);
 
-  // Determine what to display (PSI or inHg) and apply limits
   if (calculatedPSI >= 0.0) { // Positive pressure (boost)
+    calculatedPSI = (PSI_CORRECTION_M * calculatedPSI) + PSI_CORRECTION_B;
     if (calculatedPSI > MAX_BOOST_PSI) {
-      calculatedPSI = MAX_BOOST_PSI; // Clamp to max PSI (for numerical display if it goes over sensor's max)
+      calculatedPSI = MAX_BOOST_PSI;
     }
     
-    // --- Display numerical PSI value (left-aligned) ---
-    display.setCursor(0, 0); // Set cursor for main numerical reading (top-left)
-    display.print(calculatedPSI, 1); // Print PSI with 1 decimal place
+    display.setCursor(0, 0);
+    display.print(calculatedPSI, 1);
 
-    // --- Display " PSI" unit label (right-aligned) ---
     char psiUnitStr[] = " PSI";
     int16_t x1, y1;
     uint16_t w, h;
-    display.setTextSize(2); // Set text size for the unit label specifically
-    display.getTextBounds(psiUnitStr, 0, 0, &x1, &y1, &w, &h); // Get width of " PSI"
-    
-    // Calculate X position to right-align " PSI"
+    display.setTextSize(2);
+    display.getTextBounds(psiUnitStr, 0, 0, &x1, &y1, &w, &h);
     int psiUnitX = SCREEN_WIDTH - w;
-    display.setCursor(psiUnitX, 0); // Position cursor for the unit label
-    display.print(F(" PSI")); // Print the unit label
+    display.setCursor(psiUnitX, 0);
+    display.print(F(" PSI"));
 
-    // --- Draw Horizontal Bar Graph for Positive Pressure ---
-    // Map current PSI (0 to BAR_GRAPH_MAX_PSI) to screen pixels (0 to SCREEN_WIDTH-1)
-    // Values above BAR_GRAPH_MAX_PSI will result in full bar due to `constrain`
     int barWidth = map(calculatedPSI * 100, 0 * 100, BAR_GRAPH_MAX_PSI * 100, 0, SCREEN_WIDTH);
-    barWidth = constrain(barWidth, 0, SCREEN_WIDTH); // Ensure barWidth stays within display bounds
+    barWidth = constrain(barWidth, 0, SCREEN_WIDTH);
+    display.fillRect(0, 28, barWidth, 30, SSD1306_WHITE);
 
-    // Draw the filled rectangle (the bar)
-    display.fillRect(0, 28, barWidth, 30, SSD1306_WHITE); // Bar at y=28, height 30 pixels
+    int barBaseY_psi = 28;
+    int barHeight_psi = 30;
+    int y_center_psi = barBaseY_psi + barHeight_psi / 2;
+    int y_top_psi = barBaseY_psi;
+    int y_bottom_psi = barBaseY_psi + barHeight_psi;
+    int arm_length = 10;
+
+    for (int x_draw = 0; x_draw < barWidth; x_draw += 10) {
+        for (int i = 0; i < 4; i++) {
+            display.drawLine(x_draw + i, y_top_psi,
+                             x_draw + arm_length + i, y_center_psi,
+                             SSD1306_BLACK);
+            display.drawLine(x_draw + i, y_bottom_psi,
+                             x_draw + arm_length + i, y_center_psi,
+                             SSD1306_BLACK);
+        }
+    }
 
   } else { // Negative pressure (vacuum)
     if (calculatedInHg < MIN_VACUUM_INHG) {
-      calculatedInHg = MIN_VACUUM_INHG; // Clamp to min inHg
+      calculatedInHg = MIN_VACUUM_INHG;
     }
-    // Display numerical value at the top of the screen (left-aligned)
-    display.setCursor(0, 0); // Set cursor for main reading (top-left)
-    display.print(calculatedInHg, 1); // Print inHg with 1 decimal place (it will be negative)
+    display.setCursor(0, 0);
+    display.print(calculatedInHg, 1);
 
-    // Display unit label on the lower part of the screen
-    display.setTextSize(2); // Smaller text for unit label
-    // Position the unit text below where the bar graph would normally be, vertically centered.
-    // The bar graph area starts at y=28 with a height of 30. So, (28 + 30) / 2 = 43 is the center.
-    // Text size 2 means 16 pixels high. To center, start at 43 - (16/2) = 43 - 8 = 35.
-    display.setCursor(0, 35); // Position for the unit text on the lower part
-    display.print(F(" inHg")); // Print the unit label
+    char inHgUnitStr[] = " inHg";
+    int16_t x1, y1;
+    uint16_t w, h;
+    display.setTextSize(1);
+    display.getTextBounds(inHgUnitStr, 0, 0, &x1, &y1, &w, &h);
+    int inHgUnitX = SCREEN_WIDTH - w;
+    display.setCursor(inHgUnitX, 0);
+    display.print(F(" inHg"));
+
+    float inHgNormalized = abs(calculatedInHg);
+    int barWidth = map(inHgNormalized * 100, 0 * 100, BAR_GRAPH_MAX_INHG * 100, 0, SCREEN_WIDTH);
+    barWidth = constrain(barWidth, 0, SCREEN_WIDTH);
+
+    int barBaseY_inHg = 40;
+    int barHeight_inHg = 10;
+
+    display.fillRect(SCREEN_WIDTH - barWidth, barBaseY_inHg, barWidth, barHeight_inHg, SSD1306_WHITE);
+
+    for (int x_slash_start = SCREEN_WIDTH - barWidth; x_slash_start < SCREEN_WIDTH; x_slash_start += 5) {
+        display.drawLine(x_slash_start, barBaseY_inHg,
+                         x_slash_start + barHeight_inHg - 1, barBaseY_inHg + barHeight_inHg - 1,
+                         SSD1306_BLACK);
+        display.drawLine(x_slash_start + 1, barBaseY_inHg,
+                         x_slash_start + barHeight_inHg, barBaseY_inHg + barHeight_inHg - 1,
+                         SSD1306_BLACK);
+    }
   }
 
-  // Update the actual OLED display with the contents of the buffer
   display.display();
-
-  // Short delay for faster OLED display updates (50ms)
-  delay(50); // OLED display updates every 50 milliseconds
+  delay(50);
 }
